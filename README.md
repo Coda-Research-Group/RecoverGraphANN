@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/Coda-Research-Group/RecoverGraphANN/actions/workflows/ci.yml/badge.svg)](https://github.com/Coda-Research-Group/RecoverGraphANN/actions/workflows/ci.yml)
 [![Paper](https://img.shields.io/badge/CIKM%20'26-10.1145%2F3799682.3839984-b31b1b.svg)](https://doi.org/10.1145/3799682.3839984)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22009129.svg)](https://doi.org/10.5281/zenodo.22009129)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.12-blue.svg)](environment.yml)
 
