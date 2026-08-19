@@ -1,0 +1,12 @@
+[submodule "third_party/hnswlib"]
+	path = third_party/hnswlib
+	url = https://github.com/Coda-Research-Group/hnswlib.git
+	branch = RecoverGraphANN
+[submodule "third_party/RoarGraph"]
+	path = third_party/RoarGraph
+	url = https://github.com/Coda-Research-Group/RoarGraph.git
+	branch = RecoverGraphANN
+[submodule "third_party/flatnav"]
+	path = third_party/flatnav
+	url = https://github.com/Coda-Research-Group/flatnav.git
+	branch = RecoverGraphANN

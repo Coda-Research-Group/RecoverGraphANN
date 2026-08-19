@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rgann"
+version = "1.0.0"
+description = "Reproducibility artifact for 'Recovering Graph ANN Search on Attention-Derived Workloads via a Query-Agnostic Spherical Transformation' (CIKM '26)"
+readme = "README.md"
+requires-python = "==3.12.*"
+license = { file = "LICENSE" }
+authors = [
+    { name = "David Procházka", email = "prochazka@fi.muni.cz" },
+    { name = "Vlastislav Dohnal", email = "dohnal@fi.muni.cz" },
+    { name = "Martin Aumüller", email = "maau@itu.dk" },
+]
+# Kept identical, string for string, to the repository topics and to `.zenodo.json`'s
+# keywords. Nothing enforces that — topics live on GitHub, where no test can see them — so
+# the three lists are alphabetical to make a mismatch obvious by eye.
+keywords = [
+    "approximate-nearest-neighbor-search",
+    "cikm2026",
+    "flatnav",
+    "hnsw",
+    "maximum-inner-product-search",
+    "nsg",
+    "out-of-distribution",
+    "reproducibility",
+    "roargraph",
+    "vector-search",
+]
+
+[project.urls]
+Repository = "https://github.com/Coda-Research-Group/RecoverGraphANN"
+Paper = "https://doi.org/10.1145/3799682.3839984"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "tests"]
+addopts = "-q --strict-markers"
+markers = [
+    "backend: needs a compiled index backend (hnswlib, faiss, flatnav, RoarGraph)",
+    "dataset: needs a VIBE HDF5 file under data/",
+    "slow: minutes rather than seconds",
+]

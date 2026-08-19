@@ -1,0 +1,36 @@
+# The environment the paper's numbers were produced in, pinned exactly.
+#
+# Every version below was read off the machine that ran the experiments (Debian 12) rather
+# than chosen. Recreate with:
+#
+#     conda env create -n rgann -f environment.yml
+#
+# faiss-cpu is pinned to 1.9.0 because it provides both the exact brute-force ground truth
+# and the NSG baseline; a different build can reorder ties and move recall in the last
+# decimal. cmake is held below 4 because FlatNav's build does not support it. pybind11 and
+# scikit-build are build-time dependencies of the FlatNav and RoarGraph extensions.
+#
+# matplotlib-base and seaborn-base rather than the full packages: the full ones pull in Qt6
+# and PySide6, roughly 200 MB of GUI stack that nothing here uses and that has no business
+# inside a headless container. Everything the figure scripts touch — pyplot, set_theme,
+# color_palette — is in the -base builds, and with no GUI toolkit present matplotlib's
+# backend selection lands on Agg rather than guessing.
+name: rgann
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12.12
+  - faiss-cpu=1.9.0
+  - h5py=3.11.0
+  - numpy=1.26.4
+  - scipy=1.16.3
+  - matplotlib-base=3.10.7
+  - pandas=3.0.0
+  - seaborn-base=0.13.2
+  - cmake<4
+  - pip
+  - pip:
+      - pybind11==3.0.4
+      - scikit-build==0.19.0
+      - pytest==9.0.3
+      - ruff==0.15.1

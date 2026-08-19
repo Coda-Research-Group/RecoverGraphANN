@@ -1,0 +1,13 @@
+dataset_name,algorithm,use_asymmetric_transformation,use_hnsw_pruning_rule_on_X,k,hnsw_m,hnsw_ef_construction,hnsw_ef_search,roargraph_m_sq,roargraph_m_pjbp,roargraph_l_pjpq,roargraph_l_pq,recall_X_avg_at_k,recall_X_asymmetric_avg_at_k,search_time_X_ms,search_time_X_asymmetric_ms,top_candidates_avg_X,top_candidates_median_X,selected_neighbors_avg_X,selected_neighbors_median_X,degree_lowest_layer_avg_X,degree_lowest_layer_median_X,degree_lowest_layer_max_X,degree_avg_X,degree_median_X,degree_max_X,top_candidates_avg_X_asymmetric,top_candidates_median_X_asymmetric,selected_neighbors_avg_X_asymmetric,selected_neighbors_median_X_asymmetric,degree_lowest_layer_avg_X_asymmetric,degree_lowest_layer_median_X_asymmetric,degree_lowest_layer_max_X_asymmetric,degree_avg_X_asymmetric,degree_median_X_asymmetric,degree_max_X_asymmetric
+yi-128-ip,hnsw-hnswlib,True,True,10,4,500,1000,,,,,,0.8147999048233032,,871.2282180786133,,,,,,,,,,,496.93634009495037,500.0,3.9399766620310426,4.0,6.044457339373839,6.0,8,7.302832684742045,7.0,35
+yi-128-ip,hnsw-hnswlib,True,True,10,16,500,1000,,,,,,0.9599000215530396,,1767.3144340515137,,,,,,,,,,,498.0330595431282,500.0,11.436479840219699,12.0,18.851365235861863,19.0,32,19.637042636669985,19.0,70
+yi-128-ip,hnsw-hnswlib,True,True,10,48,500,1000,,,,,,0.9667999148368835,,2242.75279045105,,,,,,,,,,,498.5170172960973,500.0,13.407284267795074,12.0,26.670096836187668,23.0,96,27.067471239279612,23.0,143
+llama-128-ip,hnsw-hnswlib,True,True,10,4,500,1000,,,,,,0.7086999416351318,,895.9531784057617,,,,,,,,,,,497.6737280336562,500.0,3.9924478139562063,4.0,6.184033224220675,6.0,8,7.4992857726694195,7.0,37
+llama-128-ip,hnsw-hnswlib,True,True,10,16,500,1000,,,,,,0.9437999129295349,,2204.5533657073975,,,,,,,,,,,498.5308089915531,500.0,14.445700977564922,16.0,22.72795139361905,23.0,32,23.64308094706155,23.0,77
+llama-128-ip,hnsw-hnswlib,True,True,10,48,500,1000,,,,,,0.9580999612808228,,3154.834747314453,,,,,,,,,,,498.8705344895906,500.0,21.97786676623891,20.0,42.12280428614243,39.0,96,42.6348760903157,39.0,143
+yi-128-ip,roargraph,False,False,10,,,,100,4,500,1000,0.7919000387191772,,735.5742454528809,,,,,,,,,,,,,,,,,,,,,
+yi-128-ip,roargraph,False,False,10,,,,100,16,500,1000,0.9703999757766724,,1179.457664489746,,,,,,,,,,,,,,,,,,,,,
+yi-128-ip,roargraph,False,False,10,,,,100,48,500,1000,0.9940999746322632,,1922.5184917449951,,,,,,,,,,,,,,,,,,,,,
+llama-128-ip,roargraph,False,False,10,,,,100,4,500,1000,0.7275999784469604,,563.1859302520752,,,,,,,,,,,,,,,,,,,,,
+llama-128-ip,roargraph,False,False,10,,,,100,16,500,1000,0.9767000079154968,,870.2054023742676,,,,,,,,,,,,,,,,,,,,,
+llama-128-ip,roargraph,False,False,10,,,,100,48,500,1000,0.9971999526023865,,1213.4971618652344,,,,,,,,,,,,,,,,,,,,,

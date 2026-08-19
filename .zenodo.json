@@ -1,0 +1,56 @@
+{
+  "title": "RecoverGraphANN: reproducibility artifact for \"Recovering Graph ANN Search on Attention-Derived Workloads via a Query-Agnostic Spherical Transformation\" (CIKM '26)",
+  "description": "<p>Code, results and figures for the CIKM '26 paper <a href=\"https://doi.org/10.1145/3799682.3839984\">Recovering Graph ANN Search on Attention-Derived Workloads via a Query-Agnostic Spherical Transformation</a>.</p><p>Graph indexes such as HNSW collapse below 50% recall@10 on attention-derived inner-product workloads. The failure is traced to HNSW's neighbor-selection heuristic, which accepts barely one candidate per insertion out of a 500-candidate pool, leaving a graph too sparse for greedy descent. Scaling the database by its largest row norm and lifting it onto the unit sphere in d+1 — a transformation that reads only the database, never the queries — raises acceptance from 1.5 candidates to 13.4 on <code>yi-128-ip</code> and from 1.1 to 22.0 on <code>llama-128-ip</code> at the paper&rsquo;s <code>M = 48</code>, and recall above 95%.</p><p>The deposit contains one named entry point per paper artifact, the committed result CSVs and raw run logs so every figure and table regenerates without rebuilding an index, the instrumented hnswlib patch that makes the acceptance count measurable.</p>",
+  "upload_type": "software",
+  "license": "MIT",
+  "access_right": "open",
+  "creators": [
+    {
+      "name": "Procházka, David",
+      "affiliation": "Faculty of Informatics, Masaryk University",
+      "orcid": "0009-0000-2765-8329"
+    },
+    {
+      "name": "Dohnal, Vlastislav",
+      "affiliation": "Faculty of Informatics, Masaryk University",
+      "orcid": "0000-0001-7768-7435"
+    },
+    {
+      "name": "Aumüller, Martin",
+      "affiliation": "IT University of Copenhagen",
+      "orcid": "0000-0002-7212-6476"
+    }
+  ],
+  "keywords": [
+    "approximate-nearest-neighbor-search",
+    "cikm2026",
+    "flatnav",
+    "hnsw",
+    "maximum-inner-product-search",
+    "nsg",
+    "out-of-distribution",
+    "reproducibility",
+    "roargraph",
+    "vector-search"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "10.1145/3799682.3839984",
+      "relation": "isSupplementTo",
+      "resource_type": "publication-conferencepaper",
+      "scheme": "doi"
+    },
+    {
+      "identifier": "https://github.com/Coda-Research-Group/RecoverGraphANN",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    },
+    {
+      "identifier": "https://huggingface.co/datasets/vector-index-bench/vibe",
+      "relation": "references",
+      "resource_type": "dataset",
+      "scheme": "url"
+    }
+  ],
+  "notes": "Supported by the Czech Science Foundation, grant GF23-07040K. Computational resources were provided by the e-INFRA CZ project (ID:90254) and the ELIXIR-CZ project (ID:90255), supported by the Ministry of Education, Youth and Sports of the Czech Republic. Throughput numbers are specific to an Intel Xeon E5-2620 @ 2.00 GHz (Sandy Bridge, no AVX2) running single-threaded; recall and the graph-construction statistics are hardware-independent."
+}

@@ -1,0 +1,672 @@
+# third_party/hnswlib
+# upstream: https://github.com/nmslib/hnswlib
+# base:     3f3429661187e4c24a490a0f148fc6bc89042b3d
+# pinned:   f9739395b49fa297ab44b290e5b35bf6b02860ed
+#
+# Regenerate with: python scripts/check_patches.py --write
+# Apply with:      git -C third_party/hnswlib apply patches/hnswlib-instrumentation.patch
+
+diff --git a/hnswlib/bruteforce.h b/hnswlib/bruteforce.h
+index 8727cc8..c73cb09 100644
+--- a/hnswlib/bruteforce.h
++++ b/hnswlib/bruteforce.h
+@@ -61,7 +61,7 @@ class BruteforceSearch : public AlgorithmInterface<dist_t> {
+     }
+ 
+ 
+-    void addPoint(const void *datapoint, labeltype label, bool replace_deleted = false) {
++    AddPointMetrics addPoint(const void *datapoint, labeltype label, bool replace_deleted = false, bool enable_pruning = true) {
+         int idx;
+         {
+             std::unique_lock<std::mutex> lock(index_lock);
+@@ -80,6 +80,9 @@ class BruteforceSearch : public AlgorithmInterface<dist_t> {
+         }
+         memcpy(data_ + size_per_element_ * idx + data_size_, &label, sizeof(labeltype));
+         memcpy(data_ + size_per_element_ * idx, datapoint, data_size_);
++        // Bruteforce search doesn't have candidates visited/pruned, return empty metrics
++        AddPointMetrics metrics;
++        return metrics;
+     }
+ 
+ 
+diff --git a/hnswlib/hnswalg.h b/hnswlib/hnswalg.h
+index e269ae6..f5f4734 100644
+--- a/hnswlib/hnswalg.h
++++ b/hnswlib/hnswalg.h
+@@ -223,7 +223,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
+     }
+ 
+     std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst>
+-    searchBaseLayer(tableint ep_id, const void *data_point, int layer) {
++    searchBaseLayer(tableint ep_id, const void *data_point, int layer, AddPointMetrics* metrics = nullptr) {
+         VisitedList *vl = visited_list_pool_->getFreeVisitedList();
+         vl_type *visited_array = vl->mass;
+         vl_type visited_array_tag = vl->curV;
+@@ -242,6 +242,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
+             candidateSet.emplace(-lowerBound, ep_id);
+         }
+         visited_array[ep_id] = visited_array_tag;
++        if (metrics) metrics->candidates_visited++;
+ 
+         while (!candidateSet.empty()) {
+             std::pair<dist_t, tableint> curr_el_pair = candidateSet.top();
+@@ -279,6 +280,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
+ #endif
+                 if (visited_array[candidate_id] == visited_array_tag) continue;
+                 visited_array[candidate_id] = visited_array_tag;
++                if (metrics) metrics->candidates_visited++;
+                 char *currObj1 = (getDataByInternalId(candidate_id));
+ 
+                 dist_t dist1 = fstdistfunc_(data_point, currObj1, dist_func_param_);
+@@ -296,6 +298,9 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
+ 
+                     if (!top_candidates.empty())
+                         lowerBound = top_candidates.top().first;
++                } else {
++                    // Candidate was pruned by the pruning rule
++                    if (metrics) metrics->candidates_pruned++;
+                 }
+             }
+         }
+@@ -442,13 +447,19 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
+ 
+     void getNeighborsByHeuristic2(
+         std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> &top_candidates,
+-        const size_t M) {
++        const size_t M,
++        AddPointMetrics* metrics = nullptr,
++        bool collect_stats = false,
++        bool enable_pruning = true) {
+         if (top_candidates.size() < M) {
+             return;
+         }
+ 
+         std::priority_queue<std::pair<dist_t, tableint>> queue_closest;
+         std::vector<std::pair<dist_t, tableint>> return_list;
++        size_t good_count = 0;
++        size_t not_good_count = 0;
++        
+         while (top_candidates.size() > 0) {
+             queue_closest.emplace(-top_candidates.top().first, top_candidates.top().second);
+             top_candidates.pop();
+@@ -467,16 +478,23 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
+                         fstdistfunc_(getDataByInternalId(second_pair.second),
+                                         getDataByInternalId(curent_pair.second),
+                                         dist_func_param_);
+-                if (curdist < dist_to_query) {
++                if (enable_pruning && curdist < dist_to_query) {
+                     good = false;
+                     break;
+                 }
+             }
+             if (good) {
+                 return_list.push_back(curent_pair);
++                if (collect_stats) good_count++;
++            } else {
++                if (collect_stats) not_good_count++;
+             }
+         }
+ 
++        if (metrics && collect_stats) {
++            metrics->heuristic_good_not_good_counts.emplace_back(good_count, not_good_count);
++        }
++
+         for (std::pair<dist_t, tableint> curent_pair : return_list) {
+             top_candidates.emplace(-curent_pair.first, curent_pair.second);
+         }
+@@ -508,9 +526,13 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
+         tableint cur_c,
+         std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> &top_candidates,
+         int level,
+-        bool isUpdate) {
++        bool isUpdate,
++        AddPointMetrics* metrics = nullptr,
++        bool enable_pruning = true) {
++        // START OF THE PROBLEMATIC PART
++        const size_t top_candidates_size_at_entry = top_candidates.size();
+         size_t Mcurmax = level ? maxM_ : maxM0_;
+-        getNeighborsByHeuristic2(top_candidates, M_);
++        getNeighborsByHeuristic2(top_candidates, M_, metrics, true, enable_pruning);
+         if (top_candidates.size() > M_)
+             throw std::runtime_error("Should be not be more than M_ candidates returned by the heuristic");
+ 
+@@ -520,6 +542,8 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
+             selectedNeighbors.push_back(top_candidates.top().second);
+             top_candidates.pop();
+         }
++        if (metrics) metrics->mutual_connect_sizes.emplace_back(top_candidates_size_at_entry, selectedNeighbors.size());
++        // END OF THE PROBLEMATIC PART
+ 
+         tableint next_closest_entry_point = selectedNeighbors.back();
+ 
+@@ -600,7 +624,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
+                                                 dist_func_param_), data[j]);
+                     }
+ 
+-                    getNeighborsByHeuristic2(candidates, Mcurmax);
++                    getNeighborsByHeuristic2(candidates, Mcurmax, metrics, false, enable_pruning);
+ 
+                     int indx = 0;
+                     while (candidates.size() > 0) {
+@@ -951,7 +975,8 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
+     * Adds point. Updates the point if it is already in the index.
+     * If replacement of deleted elements is enabled: replaces previously deleted point if any, updating it with new point
+     */
+-    void addPoint(const void *data_point, labeltype label, bool replace_deleted = false) {
++    AddPointMetrics addPoint(const void *data_point, labeltype label, bool replace_deleted = false, bool enable_pruning = true) override {
++        AddPointMetrics metrics;
+         if ((allow_replace_deleted_ == false) && (replace_deleted == true)) {
+             throw std::runtime_error("Replacement of deleted elements is disabled in constructor");
+         }
+@@ -959,8 +984,9 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
+         // lock all operations with element by label
+         std::unique_lock <std::mutex> lock_label(getLabelOpMutex(label));
+         if (!replace_deleted) {
+-            addPoint(data_point, label, -1);
+-            return;
++            AddPointMetrics add_metrics;
++            addPoint(data_point, label, -1, &add_metrics, enable_pruning);
++            return add_metrics;
+         }
+         // check if there is vacant place
+         tableint internal_id_replaced;
+@@ -975,7 +1001,9 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
+         // if there is no vacant place then add or update point
+         // else add point to vacant place
+         if (!is_vacant_place) {
+-            addPoint(data_point, label, -1);
++            AddPointMetrics add_metrics;
++            addPoint(data_point, label, -1, &add_metrics, enable_pruning);
++            return add_metrics;
+         } else {
+             // we assume that there are no concurrent operations on deleted element
+             labeltype label_replaced = getExternalLabel(internal_id_replaced);
+@@ -987,12 +1015,13 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
+             lock_table.unlock();
+ 
+             unmarkDeletedInternal(internal_id_replaced);
+-            updatePoint(data_point, internal_id_replaced, 1.0);
++            updatePoint(data_point, internal_id_replaced, 1.0, &metrics, enable_pruning);
++            return metrics;
+         }
+     }
+ 
+ 
+-    void updatePoint(const void *dataPoint, tableint internalId, float updateNeighborProbability) {
++    void updatePoint(const void *dataPoint, tableint internalId, float updateNeighborProbability, AddPointMetrics* metrics = nullptr, bool enable_pruning = true) {
+         // update the feature vector associated with existing point with new vector
+         memcpy(getDataByInternalId(internalId), dataPoint, data_size_);
+ 
+@@ -1012,9 +1041,11 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
+                 continue;
+ 
+             sCand.insert(internalId);
++            if (metrics) metrics->candidates_visited++;
+ 
+             for (auto&& elOneHop : listOneHop) {
+                 sCand.insert(elOneHop);
++                if (metrics) metrics->candidates_visited++;
+ 
+                 if (distribution(update_probability_generator_) > updateNeighborProbability)
+                     continue;
+@@ -1024,6 +1055,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
+                 std::vector<tableint> listTwoHop = getConnectionsWithLock(elOneHop, layer);
+                 for (auto&& elTwoHop : listTwoHop) {
+                     sCand.insert(elTwoHop);
++                    if (metrics) metrics->candidates_visited++;
+                 }
+             }
+ 
+@@ -1045,12 +1077,15 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
+                         if (distance < candidates.top().first) {
+                             candidates.pop();
+                             candidates.emplace(distance, cand);
++                        } else {
++                            // Candidate was pruned by the pruning rule
++                            if (metrics) metrics->candidates_pruned++;
+                         }
+                     }
+                 }
+ 
+                 // Retrieve neighbours using heuristic and set connections.
+-                getNeighborsByHeuristic2(candidates, layer == 0 ? maxM0_ : maxM_);
++                getNeighborsByHeuristic2(candidates, layer == 0 ? maxM0_ : maxM_, metrics, false, enable_pruning);
+ 
+                 {
+                     std::unique_lock <std::mutex> lock(link_list_locks_[neigh]);
+@@ -1067,7 +1102,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
+             }
+         }
+ 
+-        repairConnectionsForUpdate(dataPoint, entryPointCopy, internalId, elemLevel, maxLevelCopy);
++        repairConnectionsForUpdate(dataPoint, entryPointCopy, internalId, elemLevel, maxLevelCopy, metrics, enable_pruning);
+     }
+ 
+ 
+@@ -1076,7 +1111,9 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
+         tableint entryPointInternalId,
+         tableint dataPointInternalId,
+         int dataPointLevel,
+-        int maxLevel) {
++        int maxLevel,
++        AddPointMetrics* metrics = nullptr,
++        bool enable_pruning = true) {
+         tableint currObj = entryPointInternalId;
+         if (dataPointLevel < maxLevel) {
+             dist_t curdist = fstdistfunc_(dataPoint, getDataByInternalId(currObj), dist_func_param_);
+@@ -1097,6 +1134,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
+                         _mm_prefetch(getDataByInternalId(*(datal + i + 1)), _MM_HINT_T0);
+ #endif
+                         tableint cand = datal[i];
++                        if (metrics) metrics->candidates_visited++;
+                         dist_t d = fstdistfunc_(dataPoint, getDataByInternalId(cand), dist_func_param_);
+                         if (d < curdist) {
+                             curdist = d;
+@@ -1113,7 +1151,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
+ 
+         for (int level = dataPointLevel; level >= 0; level--) {
+             std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> topCandidates = searchBaseLayer(
+-                    currObj, dataPoint, level);
++                    currObj, dataPoint, level, metrics);
+ 
+             std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> filteredTopCandidates;
+             while (topCandidates.size() > 0) {
+@@ -1133,7 +1171,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
+                         filteredTopCandidates.pop();
+                 }
+ 
+-                currObj = mutuallyConnectNewElement(dataPoint, dataPointInternalId, filteredTopCandidates, level, true);
++                currObj = mutuallyConnectNewElement(dataPoint, dataPointInternalId, filteredTopCandidates, level, true, metrics, enable_pruning);
+             }
+         }
+     }
+@@ -1150,7 +1188,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
+     }
+ 
+ 
+-    tableint addPoint(const void *data_point, labeltype label, int level) {
++    tableint addPoint(const void *data_point, labeltype label, int level, AddPointMetrics* metrics = nullptr, bool enable_pruning = true) {
+         tableint cur_c = 0;
+         {
+             // Checking if the element with the same label already exists
+@@ -1169,7 +1207,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
+                 if (isMarkedDeleted(existingInternalId)) {
+                     unmarkDeletedInternal(existingInternalId);
+                 }
+-                updatePoint(data_point, existingInternalId, 1.0);
++                updatePoint(data_point, existingInternalId, 1.0, metrics, enable_pruning);
+ 
+                 return existingInternalId;
+             }
+@@ -1243,14 +1281,18 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
+                 if (level > maxlevelcopy || level < 0)  // possible?
+                     throw std::runtime_error("Level error");
+ 
++                AddPointMetrics level_metrics;
+                 std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates = searchBaseLayer(
+-                        currObj, data_point, level);
++                        currObj, data_point, level, &level_metrics);
+                 if (epDeleted) {
+                     top_candidates.emplace(fstdistfunc_(data_point, getDataByInternalId(enterpoint_copy), dist_func_param_), enterpoint_copy);
+                     if (top_candidates.size() > ef_construction_)
+                         top_candidates.pop();
+                 }
+-                currObj = mutuallyConnectNewElement(data_point, cur_c, top_candidates, level, false);
++                currObj = mutuallyConnectNewElement(data_point, cur_c, top_candidates, level, false, &level_metrics, enable_pruning);
++                if (metrics) {
++                    metrics->add(level_metrics);
++                }
+             }
+         } else {
+             // Do nothing for the first element
+diff --git a/hnswlib/hnswlib.h b/hnswlib/hnswlib.h
+index 7ccfbba..41205dd 100644
+--- a/hnswlib/hnswlib.h
++++ b/hnswlib/hnswlib.h
+@@ -120,10 +120,121 @@ static bool AVX512Capable() {
+ #include <vector>
+ #include <iostream>
+ #include <string.h>
++#include <algorithm>
++#include <cmath>
++#include <numeric>
+ 
+ namespace hnswlib {
+ typedef size_t labeltype;
+ 
++struct Heuristic2Statistics {
++    size_t count = 0;
++    double before_avg = 0.0;
++    double before_median = 0.0;
++    size_t before_min = 0;
++    size_t before_max = 0;
++    double before_stddev = 0.0;
++    double after_avg = 0.0;
++    double after_median = 0.0;
++    size_t after_min = 0;
++    size_t after_max = 0;
++    double after_stddev = 0.0;
++
++    static Heuristic2Statistics compute(const std::vector<std::pair<size_t, size_t>>& sizes) {
++        Heuristic2Statistics stats;
++        stats.count = sizes.size();
++        if (stats.count == 0) {
++            return stats;
++        }
++
++        // Extract before and after values
++        std::vector<size_t> before_values;
++        std::vector<size_t> after_values;
++        before_values.reserve(stats.count);
++        after_values.reserve(stats.count);
++        for (const auto& p : sizes) {
++            before_values.push_back(p.first);
++            after_values.push_back(p.second);
++        }
++
++        // Compute statistics for "before" values
++        if (!before_values.empty()) {
++            std::sort(before_values.begin(), before_values.end());
++            stats.before_min = before_values.front();
++            stats.before_max = before_values.back();
++            stats.before_avg = std::accumulate(before_values.begin(), before_values.end(), 0.0) / stats.count;
++            
++            // Median
++            if (stats.count % 2 == 0) {
++                stats.before_median = (before_values[stats.count / 2 - 1] + before_values[stats.count / 2]) / 2.0;
++            } else {
++                stats.before_median = before_values[stats.count / 2];
++            }
++            
++            // Standard deviation
++            double sum_sq_diff = 0.0;
++            for (size_t val : before_values) {
++                double diff = val - stats.before_avg;
++                sum_sq_diff += diff * diff;
++            }
++            stats.before_stddev = std::sqrt(sum_sq_diff / stats.count);
++        }
++
++        // Compute statistics for "after" values
++        if (!after_values.empty()) {
++            std::sort(after_values.begin(), after_values.end());
++            stats.after_min = after_values.front();
++            stats.after_max = after_values.back();
++            stats.after_avg = std::accumulate(after_values.begin(), after_values.end(), 0.0) / stats.count;
++            
++            // Median
++            if (stats.count % 2 == 0) {
++                stats.after_median = (after_values[stats.count / 2 - 1] + after_values[stats.count / 2]) / 2.0;
++            } else {
++                stats.after_median = after_values[stats.count / 2];
++            }
++            
++            // Standard deviation
++            double sum_sq_diff = 0.0;
++            for (size_t val : after_values) {
++                double diff = val - stats.after_avg;
++                sum_sq_diff += diff * diff;
++            }
++            stats.after_stddev = std::sqrt(sum_sq_diff / stats.count);
++        }
++
++        return stats;
++    }
++};
++
++struct AddPointMetrics {
++    size_t candidates_visited = 0;
++    size_t candidates_pruned = 0;
++    /** For each mutuallyConnectNewElement call: (top_candidates size at entry, selectedNeighbors size). */
++    std::vector<std::pair<size_t, size_t>> mutual_connect_sizes;
++    /** For each getNeighborsByHeuristic2 call: (good points count, not good points count). */
++    std::vector<std::pair<size_t, size_t>> heuristic_good_not_good_counts;
++
++    void reset() {
++        candidates_visited = 0;
++        candidates_pruned = 0;
++        mutual_connect_sizes.clear();
++        heuristic_good_not_good_counts.clear();
++    }
++
++    void add(const AddPointMetrics& other) {
++        candidates_visited += other.candidates_visited;
++        candidates_pruned += other.candidates_pruned;
++        mutual_connect_sizes.insert(mutual_connect_sizes.end(),
++            other.mutual_connect_sizes.begin(),
++            other.mutual_connect_sizes.end());
++        heuristic_good_not_good_counts.insert(heuristic_good_not_good_counts.end(),
++            other.heuristic_good_not_good_counts.begin(),
++            other.heuristic_good_not_good_counts.end());
++    }
++
++};
++
+ // This can be extended to store state for filtering (e.g. from a std::set)
+ class BaseFilterFunctor {
+  public:
+@@ -186,7 +297,7 @@ class SpaceInterface {
+ template<typename dist_t>
+ class AlgorithmInterface {
+  public:
+-    virtual void addPoint(const void *datapoint, labeltype label, bool replace_deleted = false) = 0;
++    virtual AddPointMetrics addPoint(const void *datapoint, labeltype label, bool replace_deleted = false, bool enable_pruning = true) = 0;
+ 
+     virtual std::priority_queue<std::pair<dist_t, labeltype>>
+         searchKnn(const void*, size_t, BaseFilterFunctor* isIdAllowed = nullptr) const = 0;
+diff --git a/python_bindings/bindings.cpp b/python_bindings/bindings.cpp
+index dd09e80..e1c042e 100644
+--- a/python_bindings/bindings.cpp
++++ b/python_bindings/bindings.cpp
+@@ -6,6 +6,7 @@
+ #include "hnswlib.h"
+ #include <thread>
+ #include <atomic>
++#include <mutex>
+ #include <stdlib.h>
+ #include <assert.h>
+ 
+@@ -248,7 +249,7 @@ class Index {
+     }
+ 
+ 
+-    void addItems(py::object input, py::object ids_ = py::none(), int num_threads = -1, bool replace_deleted = false) {
++    py::tuple addItems(py::object input, py::object ids_ = py::none(), int num_threads = -1, bool replace_deleted = false, bool enable_pruning = true) {
+         py::array_t < dist_t, py::array::c_style | py::array::forcecast > items(input);
+         auto buffer = items.request();
+         if (num_threads <= 0)
+@@ -267,6 +268,14 @@ class Index {
+ 
+         std::vector<size_t> ids = get_input_ids_and_check_shapes(ids_, rows);
+ 
++        // Thread-safe metrics accumulation
++        std::atomic<size_t> total_candidates_visited{0};
++        std::atomic<size_t> total_candidates_pruned{0};
++        std::vector<std::pair<size_t, size_t>> all_mutual_connect_sizes;
++        std::vector<std::pair<size_t, size_t>> all_heuristic_good_not_good_counts;
++        std::mutex mutual_connect_mutex;
++        std::mutex heuristic_counts_mutex;
++
+         {
+             int start = 0;
+             if (!ep_added) {
+@@ -277,7 +286,13 @@ class Index {
+                     normalize_vector(vector_data, norm_array.data());
+                     vector_data = norm_array.data();
+                 }
+-                appr_alg->addPoint((void*)vector_data, (size_t)id, replace_deleted);
++                hnswlib::AddPointMetrics metrics = appr_alg->addPoint((void*)vector_data, (size_t)id, replace_deleted, enable_pruning);
++                total_candidates_visited += metrics.candidates_visited;
++                total_candidates_pruned += metrics.candidates_pruned;
++                for (const auto& p : metrics.mutual_connect_sizes)
++                    all_mutual_connect_sizes.push_back(p);
++                for (const auto& p : metrics.heuristic_good_not_good_counts)
++                    all_heuristic_good_not_good_counts.push_back(p);
+                 start = 1;
+                 ep_added = true;
+             }
+@@ -286,7 +301,19 @@ class Index {
+             if (normalize == false) {
+                 ParallelFor(start, rows, num_threads, [&](size_t row, size_t threadId) {
+                     size_t id = ids.size() ? ids.at(row) : (cur_l + row);
+-                    appr_alg->addPoint((void*)items.data(row), (size_t)id, replace_deleted);
++                    hnswlib::AddPointMetrics metrics = appr_alg->addPoint((void*)items.data(row), (size_t)id, replace_deleted, enable_pruning);
++                    total_candidates_visited += metrics.candidates_visited;
++                    total_candidates_pruned += metrics.candidates_pruned;
++                    {
++                        std::lock_guard<std::mutex> lock(mutual_connect_mutex);
++                        for (const auto& p : metrics.mutual_connect_sizes)
++                            all_mutual_connect_sizes.push_back(p);
++                    }
++                    {
++                        std::lock_guard<std::mutex> lock(heuristic_counts_mutex);
++                        for (const auto& p : metrics.heuristic_good_not_good_counts)
++                            all_heuristic_good_not_good_counts.push_back(p);
++                    }
+                     });
+             } else {
+                 std::vector<float> norm_array(num_threads * dim);
+@@ -296,11 +323,33 @@ class Index {
+                     normalize_vector((float*)items.data(row), (norm_array.data() + start_idx));
+ 
+                     size_t id = ids.size() ? ids.at(row) : (cur_l + row);
+-                    appr_alg->addPoint((void*)(norm_array.data() + start_idx), (size_t)id, replace_deleted);
++                    hnswlib::AddPointMetrics metrics = appr_alg->addPoint((void*)(norm_array.data() + start_idx), (size_t)id, replace_deleted, enable_pruning);
++                    total_candidates_visited += metrics.candidates_visited;
++                    total_candidates_pruned += metrics.candidates_pruned;
++                    {
++                        std::lock_guard<std::mutex> lock(mutual_connect_mutex);
++                        for (const auto& p : metrics.mutual_connect_sizes)
++                            all_mutual_connect_sizes.push_back(p);
++                    }
++                    {
++                        std::lock_guard<std::mutex> lock(heuristic_counts_mutex);
++                        for (const auto& p : metrics.heuristic_good_not_good_counts)
++                            all_heuristic_good_not_good_counts.push_back(p);
++                    }
+                     });
+             }
+             cur_l += rows;
+         }
++
++        py::list mutual_connect_sizes_py;
++        for (const auto& p : all_mutual_connect_sizes)
++            mutual_connect_sizes_py.append(py::make_tuple(p.first, p.second));
++        
++        py::list heuristic_good_not_good_counts_py;
++        for (const auto& p : all_heuristic_good_not_good_counts)
++            heuristic_good_not_good_counts_py.append(py::make_tuple(p.first, p.second));
++        
++        return py::make_tuple(total_candidates_visited.load(), total_candidates_pruned.load(), mutual_connect_sizes_py, heuristic_good_not_good_counts_py);
+     }
+ 
+ 
+@@ -348,6 +397,54 @@ class Index {
+     }
+ 
+ 
++    // WARNING: Index::getAllLinks is not thread-safe with Index::addItems
++    //
++    // Returns, for every point in the index, the outgoing links on each level.
++    //
++    // Python return type:
++    //   { label: [ [nbr_label_l0, ...], [nbr_label_l1, ...], ... ], ... }
++    py::dict getAllLinks() const {
++        py::dict result;
++
++        if (!index_inited || !appr_alg) {
++            return result;
++        }
++
++        // Protect graph structure from concurrent modification while we traverse it.
++        std::unique_lock<std::mutex> templock(appr_alg->global);
++
++        for (const auto& kv : appr_alg->label_lookup_) {
++            hnswlib::labeltype label = kv.first;
++            hnswlib::tableint internal_id = kv.second;
++
++            // Skip elements that are currently marked as deleted
++            if (appr_alg->isMarkedDeleted(internal_id)) {
++                continue;
++            }
++
++            int max_level_for_point = appr_alg->element_levels_[internal_id];
++            py::list levels_py;
++            for (int level = 0; level <= max_level_for_point; ++level) {
++                hnswlib::linklistsizeint* ll = appr_alg->get_linklist_at_level(internal_id, level);
++                int sz = appr_alg->getListCount(ll);
++                hnswlib::tableint* neighbors = (hnswlib::tableint*)(ll + 1);
++
++                py::list neigh_labels;
++                for (int i = 0; i < sz; ++i) {
++                    hnswlib::tableint neigh_internal = neighbors[i];
++                    hnswlib::labeltype neigh_label = appr_alg->getExternalLabel(neigh_internal);
++                    neigh_labels.append(neigh_label);
++                }
++                levels_py.append(neigh_labels);
++            }
++
++            result[py::int_(label)] = levels_py;
++        }
++
++        return result;
++    }
++
++
+     py::dict getAnnData() const { /* WARNING: Index::getAnnData is not thread-safe with Index::addItems */
+         std::unique_lock <std::mutex> templock(appr_alg->global);
+ 
+@@ -799,7 +896,7 @@ class BFIndex {
+     }
+ 
+ 
+-    void addItems(py::object input, py::object ids_ = py::none()) {
++    py::tuple addItems(py::object input, py::object ids_ = py::none()) {
+         py::array_t < dist_t, py::array::c_style | py::array::forcecast > items(input);
+         auto buffer = items.request();
+         size_t rows, features;
+@@ -810,19 +907,27 @@ class BFIndex {
+ 
+         std::vector<size_t> ids = get_input_ids_and_check_shapes(ids_, rows);
+ 
++        size_t total_candidates_visited = 0;
++        size_t total_candidates_pruned = 0;
++
+         {
+             for (size_t row = 0; row < rows; row++) {
+                 size_t id = ids.size() ? ids.at(row) : cur_l + row;
++                hnswlib::AddPointMetrics metrics;
+                 if (!normalize) {
+-                    alg->addPoint((void *) items.data(row), (size_t) id);
++                    metrics = alg->addPoint((void *) items.data(row), (size_t) id);
+                 } else {
+                     std::vector<float> normalized_vector(dim);
+                     normalize_vector((float *)items.data(row), normalized_vector.data());
+-                    alg->addPoint((void *) normalized_vector.data(), (size_t) id);
++                    metrics = alg->addPoint((void *) normalized_vector.data(), (size_t) id);
+                 }
++                total_candidates_visited += metrics.candidates_visited;
++                total_candidates_pruned += metrics.candidates_pruned;
+             }
+             cur_l+=rows;
+         }
++
++        return py::make_tuple(total_candidates_visited, total_candidates_pruned);
+     }
+ 
+ 
+@@ -933,9 +1038,13 @@ PYBIND11_PLUGIN(hnswlib) {
+             py::arg("data"),
+             py::arg("ids") = py::none(),
+             py::arg("num_threads") = -1,
+-            py::arg("replace_deleted") = false)
++            py::arg("replace_deleted") = false,
++            py::arg("enable_pruning") = true)
+         .def("get_items", &Index<float>::getData, py::arg("ids") = py::none(), py::arg("return_type") = "numpy")
+         .def("get_ids_list", &Index<float>::getIdsList)
++        .def("get_all_links", &Index<float>::getAllLinks,
++             "Return all outgoing links for each point on each level as a dict:\n"
++             "  {label: [ [nbr_label_l0, ...], [nbr_label_l1, ...], ... ], ... }")
+         .def("set_ef", &Index<float>::set_ef, py::arg("ef"))
+         .def("set_num_threads", &Index<float>::set_num_threads, py::arg("num_threads"))
+         .def("index_file_size", &Index<float>::indexFileSize)

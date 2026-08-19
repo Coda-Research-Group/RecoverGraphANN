@@ -1,0 +1,9 @@
+artifact,command,started_utc,finished_utc,wall_seconds,exit_code,hostname
+figure1-norms,"python experiments/fig1_norm_distributions.py --output figures",2026-08-17T12:15:43Z,2026-08-17T12:15:56Z,13,0,reference-machine
+figure2-inner-products,"python experiments/fig2_inner_product_distributions.py --output figures",2026-08-17T12:15:56Z,2026-08-17T12:16:24Z,28,0,reference-machine
+table1-degree,"python experiments/table1_degree.py --csv results/table1_degree.csv",2026-08-17T12:16:24Z,2026-08-17T13:19:23Z,3779,0,reference-machine
+ablation-l2,"python experiments/ablation_l2_normalization.py --csv results/ablation_l2_normalization.csv",2026-08-17T13:19:23Z,2026-08-17T13:47:42Z,1699,0,reference-machine
+figure3-recall-qps,"python experiments/fig3_recall_qps.py --csv results/fig3_recall_qps.csv --output figures --backends hnsw-hnswlib nsg-faiss flatnav roargraph",2026-08-17T13:47:42Z,2026-08-17T15:49:05Z,7283,0,reference-machine
+table1-render,"python experiments/table1_degree.py --render --csv results/table1_degree.csv --output results/table1_degree.tex",2026-08-17T15:49:05Z,2026-08-17T15:49:08Z,3,0,reference-machine
+figure1-norms,"python experiments/fig1_norm_distributions.py --output figures",2026-08-17T15:50:17Z,2026-08-17T15:50:32Z,15,0,reference-machine
+figure3-recall-qps,"python experiments/fig3_recall_qps.py --csv results/fig3_recall_qps.csv --output figures --backends hnsw-hnswlib nsg-faiss flatnav roargraph",2026-08-17T15:50:32Z,2026-08-17T17:52:29Z,7317,0,reference-machine

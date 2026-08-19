@@ -1,0 +1,56 @@
+cff-version: 1.2.0
+title: >-
+  RecoverGraphANN: reproducibility artifact for "Recovering Graph ANN Search on
+  Attention-Derived Workloads via a Query-Agnostic Spherical Transformation"
+message: >-
+  If you use this software, please cite the CIKM '26 paper below.
+type: software
+license: MIT
+repository-code: https://github.com/Coda-Research-Group/RecoverGraphANN
+authors:
+  - given-names: David
+    family-names: Procházka
+    email: prochazka@fi.muni.cz
+    orcid: https://orcid.org/0009-0000-2765-8329
+    affiliation: Faculty of Informatics, Masaryk University
+  - given-names: Vlastislav
+    family-names: Dohnal
+    email: dohnal@fi.muni.cz
+    orcid: https://orcid.org/0000-0001-7768-7435
+    affiliation: Faculty of Informatics, Masaryk University
+  - given-names: Martin
+    family-names: Aumüller
+    email: maau@itu.dk
+    orcid: https://orcid.org/0000-0002-7212-6476
+    affiliation: IT University of Copenhagen
+preferred-citation:
+  type: conference-paper
+  title: >-
+    Recovering Graph ANN Search on Attention-Derived Workloads via a
+    Query-Agnostic Spherical Transformation
+  authors:
+    - given-names: David
+      family-names: Procházka
+      orcid: https://orcid.org/0009-0000-2765-8329
+    - given-names: Vlastislav
+      family-names: Dohnal
+      orcid: https://orcid.org/0000-0001-7768-7435
+    - given-names: Martin
+      family-names: Aumüller
+      orcid: https://orcid.org/0000-0002-7212-6476
+  collection-title: >-
+    Proceedings of the 35th ACM International Conference on Information and
+    Knowledge Management (CIKM '26)
+  conference:
+    name: >-
+      35th ACM International Conference on Information and Knowledge Management
+    city: Rome
+    country: IT
+    date-start: '2026-11-07'
+    date-end: '2026-11-11'
+  publisher:
+    name: Association for Computing Machinery
+    city: New York, NY, USA
+  year: 2026
+  doi: 10.1145/3799682.3839984
+  isbn: 979-8-4007-2539-5

@@ -1,0 +1,40 @@
+# Scratch space. Never committed — the camera-ready lives here during preparation.
+tmp/
+
+# VIBE HDF5 files are downloaded by scripts/download_data.sh (checksums in data/MANIFEST.sha256).
+data/*.hdf5
+
+# Serialized index artifacts are too large for git; they live in the Zenodo deposit.
+# Anchored to the repo root on purpose — an unanchored `indexes/` also matches the
+# src/rgann/indexes package, which silently disappears from the commit.
+/indexes/
+*.index
+*.bin
+
+# Learn-table caches (regenerable; deterministic given the seed).
+learn_cache/
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+
+# `make quick` output. A 10k subsample is not the paper, so it is written here instead of
+# over the committed results — and not committed itself.
+results/quick/
+figures/quick/
+
+# NOTE: results/*.csv and results/logs/*.csv ARE committed on purpose — figures and
+# Table 1 must regenerate without rebuilding a single index.

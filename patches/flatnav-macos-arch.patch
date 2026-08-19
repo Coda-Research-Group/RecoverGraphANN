@@ -1,0 +1,20 @@
+diff --git a/python-bindings/setup.py b/python-bindings/setup.py
+index f93bf22..ae648a4 100644
+--- a/python-bindings/setup.py
++++ b/python-bindings/setup.py
+@@ -1,5 +1,6 @@
+ import os
+ from skbuild import setup
++import platform
+ import sys, subprocess
+ from typing import List
+ __version__ = "0.1.2"
+@@ -63,7 +64,7 @@ def construct_cmake_args() -> List[str]:
+         
+         # Add x86_64 specific flags for macOS
+         compile_args.extend([
+-            "-arch", "x86_64",
++            "-arch", platform.machine(),
+             "-mmacosx-version-min=10.14",
+             "-stdlib=libc++"
+         ])

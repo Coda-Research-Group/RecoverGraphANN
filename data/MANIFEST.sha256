@@ -1,0 +1,12 @@
+# VIBE attention datasets used in the paper.
+#
+# Source:   https://huggingface.co/datasets/vector-index-bench/vibe
+# Revision: c8723b8f8c2ac64afb181aa1f4fd5f078bfca286
+#
+# These SHA-256 sums were taken from the copies the experiments actually ran against
+# (downloaded 2025-09-29) and verified on 2026-08-17 against the LFS object ids
+# Hugging Face reports for the revision above. They agree, so the files have not drifted.
+#
+# Verify with:  sha256sum -c data/MANIFEST.sha256
+23d76fdbb0808909d02be83f95c074c3ccf54018b03a80d54e8e31ad1815071e  yi-128-ip.hdf5
+43c6a366d1e7dfd9e331e712708a664f91f8dbda1928c9923ef730d6718a2f52  llama-128-ip.hdf5

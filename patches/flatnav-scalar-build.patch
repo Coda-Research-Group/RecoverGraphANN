@@ -1,0 +1,12 @@
+--- a/python-bindings/setup.py
++++ b/python-bindings/setup.py
+@@ -83,6 +83,9 @@ def construct_cmake_args() -> List[str]:
+             "-march=native"  
+         ]
+ 
++    if int(os.environ.get("NO_SIMD_VECTORIZATION", "0")):
++        compile_args.append("-DNO_SIMD_VECTORIZATION")
++
+     # Add SIMD flags if SIMD vectorization is enabled
+     if not int(os.environ.get("NO_SIMD_VECTORIZATION", "0")):
+         if sys.platform in ["linux", "linux2"]:

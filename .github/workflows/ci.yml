@@ -1,0 +1,79 @@
+name: CI
+
+# What runs here is everything that does not need a compiled index backend or a 635 MB
+# dataset: lint, shell checks, the unit tests, and the check that every printed cell of
+# Table 1 still resolves to a row in the committed run logs.
+#
+# The backend-dependent half — building HNSW, NSG, FlatNav and RoarGraph and reproducing the
+# paper's numbers — runs on the reference machine, not here. A GitHub runner has different
+# silicon, so its throughput numbers would not mean anything anyway. See the hardware note in
+# the README.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    # Every step here is seconds of work, so six hours means something is wedged rather
+    # than slow. That is #20: apt-get update stalled and the default job timeout let it
+    # burn until it hit six hours.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The submodules are pinned to specific commits; fetch them so check-patches has
+          # something to compare against. Shallow clones cannot serve the base commit a
+          # patch is generated from, hence fetch-depth 0.
+          submodules: recursive
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install check dependencies
+        # Deliberately not environment.yml: none of the checks below need faiss, and pulling
+        # it in would make CI slow enough that people stop reading it.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install 'numpy==1.26.4' 'pytest==9.0.3' 'ruff==0.15.1'
+
+      - name: Lint
+        run: |
+          ruff check --output-format=github .
+          ruff format --check .
+
+      - name: Shellcheck
+        # The ubuntu-24.04 image already ships shellcheck. Reaching for apt regardless is
+        # what hung in #20, so only fall back to it when the binary is genuinely absent.
+        run: |
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends shellcheck
+          fi
+          shellcheck --version | head -2
+          shellcheck scripts/*.sh
+
+      - name: Tests
+        run: pytest -q
+
+      - name: Patch drift
+        # Skipped rather than failed when the submodules are not present, so a fork without
+        # access to them still gets the rest of the signal.
+        run: |
+          if [ -e third_party/hnswlib/.git ]; then
+            python scripts/check_patches.py
+          else
+            echo "submodules not checked out; skipping the patch-drift check"
+          fi
